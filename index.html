@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUEL - The Source of Creation</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div id="app">
+        <transition name="fade">
+            <div v-if="showToast" :class="['toast', {'delete-mode': toastType === 'delete'}]">
+                <div class="toast-icon">
+                    <i :class="toastType === 'delete' ? 'fas fa-trash' : 'fas fa-check'"></i>
+                </div>
+                <span>{{ toastMessage }}</span>
+            </div>
+        </transition>
+
+        <transition name="fade">
+            <div v-if="showAuthModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f0f1a]/90 backdrop-blur-sm">
+                <div class="relative glass-card p-8 w-full max-w-md mx-4 shadow-2xl border border-white/10">
+                    <button @click="showAuthModal = false" class="absolute top-4 right-4 text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button>
+
+                    <div class="text-center mb-8">
+                        <div class="inline-block p-4 rounded-full bg-indigo-500/20 mb-4 border border-indigo-500/30">
+                            <i class="fas fa-layer-group text-3xl text-indigo-400"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-white mb-2 brand-font tracking-wide">Welcome to QUEL</h2>
+                        <p class="text-gray-400 text-sm">Sign in to edit and save your Sources.</p>
+                    </div>
+
+                    <div class="flex p-1 bg-gray-800/50 rounded-lg mb-6">
+                        <button @click="authTab = 'login'" :class="['flex-1 py-2 text-sm font-medium rounded-md transition', authTab === 'login' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white']">Login</button>
+                        <button @click="authTab = 'register'" :class="['flex-1 py-2 text-sm font-medium rounded-md transition', authTab === 'register' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white']">Register</button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <button @click="handleSocialLogin" :disabled="authLoading || isLockedOut" class="w-full py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition flex items-center justify-center gap-2 group disabled:opacity-50">
+                            <i v-if="authLoading" class="fas fa-circle-notch fa-spin"></i>
+                            <i v-else class="fab fa-github text-lg group-hover:text-white"></i>
+                            <span>{{ authLoading ? 'Connecting...' : 'Continue with GitHub' }}</span>
+                        </button>
+
+                        <div class="relative flex py-2 items-center">
+                            <div class="flex-grow border-t border-gray-700"></div>
+                            <span class="flex-shrink-0 mx-4 text-gray-500 text-xs uppercase">Or</span>
+                            <div class="flex-grow border-t border-gray-700"></div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Email Address</label>
+                            <input v-model="authEmail" type="email" class="w-full bg-gray-900/50 border border-gray-700 focus:border-indigo-500 rounded-lg px-4 py-2.5 text-white text-sm outline-none transition disabled:opacity-50" placeholder="you@quel.io" :disabled="authLoading || isLockedOut">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+                            <input v-model="authPassword" type="password" class="w-full bg-gray-900/50 border border-gray-700 focus:border-indigo-500 rounded-lg px-4 py-2.5 text-white text-sm outline-none transition disabled:opacity-50" placeholder="••••••••" :disabled="authLoading || isLockedOut">
+                        </div>
+
+                        <div v-if="authError" class="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-xs flex items-start gap-2">
+                            <i class="fas fa-exclamation-circle mt-0.5"></i> <span class="font-semibold">{{ authError }}</span>
+                        </div>
+
+                        <button @click="handleLogin" :disabled="authLoading || isLockedOut" class="w-full py-2.5 rounded-lg btn-primary text-white text-sm font-bold shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                            <span v-if="isLockedOut">Locked Out ({{ lockoutCountdown }}s)</span>
+                            <span v-else>{{ authTab === 'login' ? 'Sign In' : 'Create Account' }}</span>
+                        </button>
+                    </div>
+                    
+                    <p class="text-center text-xs text-gray-500 mt-6">Demo password: <strong class="text-indigo-400">admin123</strong></p>
+                </div>
+            </div>
+        </transition>
+
+        <transition name="fade">
+            <div v-if="showPricingModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f0f1a]/90 backdrop-blur-sm p-4">
+                <div class="relative glass-card p-8 w-full max-w-5xl mx-4 shadow-2xl border border-white/10 max-h-[90vh] overflow-y-auto">
+                    <button @click="showPricingModal = false" class="absolute top-4 right-4 text-gray-400 hover:text-white transition z-10"><i class="fas fa-times"></i></button>
+
+                    <div class="text-center mb-12">
+                        <h2 class="text-4xl font-bold text-white mb-3 brand-font">Choose Your Plan</h2>
+                        <p class="text-gray-400">Unlock powerful features and scale your creativity</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="glass-card p-6 border-2" :class="user.tier === 'free' ? 'border-indigo-500' : 'border-gray-700'">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold text-white mb-2">Free</h3>
+                                <div class="text-4xl font-bold text-white mb-1">$0</div>
+                                <p class="text-gray-400 text-sm">Forever</p>
+                            </div>
+                            <ul class="space-y-3 mb-6">
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Public sources only</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Basic code editor</li>
+                                <li class="flex items-start gap-2 text-sm text-gray-500"><i class="fas fa-times text-red-400 mt-1"></i> No private sources</li>
+                                <li class="flex items-start gap-2 text-sm text-gray-500"><i class="fas fa-times text-red-400 mt-1"></i> No asset hosting</li>
+                                <li class="flex items-start gap-2 text-sm text-gray-500"><i class="fas fa-times text-red-400 mt-1"></i> No collaboration</li>
+                                <li class="flex items-start gap-2 text-sm text-gray-500"><i class="fas fa-times text-red-400 mt-1"></i> AI assistant locked</li>
+                                <li class="flex items-start gap-2 text-sm text-red-400"><i class="fas fa-ad mt-1"></i> Ads displayed</li>
+                            </ul>
+                            <button @click="switchTier('free')" :disabled="user.tier === 'free'" class="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 text-white font-semibold transition">
+                                {{ user.tier === 'free' ? 'Current Plan' : 'Switch to Free' }}
+                            </button>
+                        </div>
+
+                        <div class="glass-card p-6 border-2" :class="user.tier === 'pro' ? 'border-amber-500' : 'border-gray-700'">
+                            <div class="text-center mb-6">
+                                <div class="inline-block mb-2"><span class="tier-badge pro">PRO</span></div>
+                                <h3 class="text-2xl font-bold text-white mb-2">Pro</h3>
+                                <div class="text-4xl font-bold text-white mb-1">$9</div>
+                                <p class="text-gray-400 text-sm">Per month</p>
+                            </div>
+                            <ul class="space-y-3 mb-6">
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Everything in Free</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Private sources</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> 2GB asset hosting</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Collab mode (2 people)</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> No ads</li>
+                                <li class="flex items-start gap-2 text-sm text-gray-500"><i class="fas fa-times text-red-400 mt-1"></i> AI assistant locked</li>
+                            </ul>
+                            <button @click="switchTier('pro')" :disabled="user.tier === 'pro'" class="w-full py-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 text-white font-semibold transition shadow-lg">
+                                {{ user.tier === 'pro' ? 'Current Plan' : 'Upgrade to Pro' }}
+                            </button>
+                        </div>
+
+                        <div class="glass-card p-6 border-2" :class="user.tier === 'pro_plus' ? 'border-purple-500' : 'border-gray-700'">
+                            <div class="text-center mb-6">
+                                <div class="inline-block mb-2"><span class="tier-badge pro_plus">PRO+</span></div>
+                                <h3 class="text-2xl font-bold text-white mb-2">Pro+</h3>
+                                <div class="text-4xl font-bold text-white mb-1">$19</div>
+                                <p class="text-gray-400 text-sm">Per month</p>
+                            </div>
+                            <ul class="space-y-3 mb-6">
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Everything in Pro</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Unlimited private sources</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> 10GB asset hosting</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> Collab mode (4 people)</li>
+                                <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i> <strong>AI Assistant (Llama 3)</strong></li>
+                            </ul>
+                            <button @click="switchTier('pro_plus')" :disabled="user.tier === 'pro_plus'" class="w-full py-3 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 disabled:opacity-50 text-white font-semibold transition shadow-lg">
+                                {{ user.tier === 'pro_plus' ? 'Current Plan' : 'Upgrade to Pro+' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <transition name="fade">
+            <div v-if="showAssetModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f0f1a]/90 backdrop-blur-sm">
+                <div class="relative glass-card p-6 w-full max-w-2xl mx-4 shadow-2xl border border-white/10">
+                    <button @click="showAssetModal = false" class="absolute top-4 right-4 text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button>
+                    
+                    <h3 class="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                        <i class="fas fa-cloud-upload-alt text-indigo-400"></i>
+                        Asset Storage
+                    </h3>
+
+                    <div v-if="user.tier === 'free'" class="premium-overlay relative rounded-lg py-12">
+                        <i class="fas fa-lock text-6xl text-gray-600 mb-4"></i>
+                        <h4 class="text-2xl font-bold text-white mb-2">Upgrade to Upload Assets</h4>
+                        <p class="text-gray-400 mb-6">Asset hosting available on Pro and Pro+ plans</p>
+                        <button @click="showPricingModal = true; showAssetModal = false" class="px-6 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold">
+                            View Plans
+                        </button>
+                    </div>
+
+                    <div v-else>
+                        <div class="mb-6">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-gray-400 text-sm">Storage Used</span>
+                                <span class="text-white font-semibold">{{ assetStorage.used }}MB / {{ assetStorage.limit }}GB</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-indigo-500 h-2 rounded-full transition-all" :style="{width: (assetStorage.used / (assetStorage.limit * 1024) * 100) + '%'}"></div>
+                            </div>
+                        </div>
+
+                        <button @click="uploadAsset" class="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold mb-4 transition">
+                            <i class="fas fa-plus mr-2"></i>Upload Asset
+                        </button>
+
+                        <div class="space-y-2 max-h-64 overflow-y-auto">
+                            <div v-if="assets.length === 0" class="text-center py-8 text-gray-500">
+                                <i class="fas fa-folder-open text-4xl mb-2"></i>
+                                <p>No assets uploaded yet</p>
+                            </div>
+                            <div v-for="asset in assets" :key="asset.id" class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-file text-gray-400"></i>
+                                    <span class="text-white text-sm">{{ asset.name }}</span>
+                                </div>
+                                <button @click="deleteAsset(asset.id)" class="text-gray-500 hover:text-red-400"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <transition name="fade">
+            <div v-if="showCollabModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f0f1a]/90 backdrop-blur-sm">
+                <div class="relative glass-card p-6 w-full max-w-md mx-4 shadow-2xl border border-white/10">
+                    <button @click="showCollabModal = false" class="absolute top-4 right-4 text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button>
+                    
+                    <h3 class="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                        <i class="fas fa-users text-indigo-400"></i>
+                        Collaboration
+                    </h3>
+
+                    <div v-if="user.tier === 'free'" class="premium-overlay relative rounded-lg">
+                        <i class="fas fa-lock text-6xl text-gray-600 mb-4"></i>
+                        <h4 class="text-2xl font-bold text-white mb-2">Upgrade to Collaborate</h4>
+                        <p class="text-gray-400 mb-6">Collaboration available on Pro and Pro+ plans</p>
+                        <button @click="showPricingModal = true; showCollabModal = false" class="px-6 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold">
+                            View Plans
+                        </button>
+                    </div>
+
+                    <div v-else>
+                        <div class="mb-4">
+                            <p class="text-gray-400 text-sm mb-2">
+                                Team Members: {{ collaborators.length }} / {{ maxCollaborators }}
+                            </p>
+                            <div v-if="collaborators.length < maxCollaborators" class="flex gap-2">
+                                <input v-model="inviteEmail" type="email" placeholder="email@example.com" class="flex-1 bg-gray-900/50 border border-gray-700 focus:border-indigo-500 rounded-lg px-4 py-2 text-white text-sm outline-none transition">
+                                <button @click="inviteCollaborator" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                            <p v-else class="text-amber-400 text-xs mt-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                {{ user.tier === 'pro' ? 'Upgrade to Pro+ for more team members' : 'Team limit reached' }}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2 max-h-48 overflow-y-auto">
+                            <div v-for="collab in collaborators" :key="collab.id" class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <img :src="collab.avatar" class="w-8 h-8 rounded-full" :alt="collab.name">
+                                    <div>
+                                        <p class="text-white text-sm font-medium">{{ collab.name }}</p>
+                                        <p class="text-gray-500 text-xs">{{ collab.email }}</p>
+                                    </div>
+                                </div>
+                                <button @click="removeCollaborator(collab.id)" class="text-red-400 hover:text-red-300 transition">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <div v-show="!showEditor">
+            <nav class="nav-fixed px-6 py-4">
+                <div class="max-w-7xl mx-auto flex items-center justify-between">
+                    <div class="flex items-center gap-6 cursor-pointer" @click="scrollToTop">
+                        <i class="fas fa-layer-group text-2xl text-indigo-500"></i>
+                        <span class="text-xl font-bold brand-font bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent tracking-widest">QUEL</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                        <button v-if="user.tier !== 'pro_plus'" @click="showPricingModal = true" class="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-white transition text-sm font-bold uppercase tracking-wider">
+                            <i class="fas fa-crown"></i> Go Pro
+                        </button>
+
+                        <button @click="createNewPen" class="btn-primary px-5 py-2 rounded-lg font-semibold text-white text-sm flex items-center gap-2 shadow-lg shadow-indigo-500/30">
+                            <i class="fas fa-plus"></i>
+                            <span class="hidden sm:inline">Create Source</span>
+                        </button>
+                        
+                        <div v-if="isLoggedIn" class="relative">
+                            <button @click="showUserMenu = !showUserMenu" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 transition">
+                                <img src="https://ui-avatars.com/api/?name=Demo+User&background=6366f1&color=fff&size=128" class="w-8 h-8 rounded-full border border-indigo-500" alt="User">
+                                <span v-if="user.tier !== 'free'" :class="['absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#1a1a2e] flex items-center justify-center text-[8px]', user.tier === 'pro' ? 'bg-amber-500' : 'bg-purple-600']">
+                                    <i class="fas fa-star text-white"></i>
+                                </span>
+                            </button>
+                            <div v-if="showUserMenu" class="absolute right-0 mt-2 w-56 glass-card p-2 shadow-xl z-50 bg-[#1a1a2e]">
+                                <div class="px-4 py-3 border-b border-gray-700 mb-2">
+                                    <p class="text-white font-bold">Demo User</p>
+                                    <p class="text-xs text-gray-400 capitalize">{{ user.tier.replace('_', ' ') }} Plan</p>
+                                </div>
+                                <a href="profile.html" class="block px-4 py-2 rounded hover:bg-gray-700 transition text-sm text-gray-300"><i class="fas fa-user mr-2 w-5"></i>Profile</a>
+                                <a href="#" @click="showPricingModal = true" class="block px-4 py-2 rounded hover:bg-gray-700 transition text-sm text-amber-400"><i class="fas fa-crown mr-2 w-5"></i>Upgrade Plan</a>
+                                <a href="#" @click="logout" class="block px-4 py-2 rounded hover:bg-gray-700 transition text-sm text-red-400"><i class="fas fa-sign-out-alt mr-2 w-5"></i>Logout</a>
+                            </div>
+                        </div>
+                        <div v-else>
+                            <button @click="showAuthModal = true" class="text-gray-300 hover:text-white font-medium text-sm transition">Sign In</button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <header class="hero-section" id="hero-scene">
+                <canvas id="hero-shader-canvas" class="absolute top-0 left-0 w-full h-full object-cover z-0 pointer-events-none"></canvas>
+                <div ref="titleRef" class="physics-element text-center z-20 max-w-4xl px-4 animate-[fadeIn_1s_ease-out]">
+                    <h1 class="hero-title text-6xl md:text-8xl font-extrabold mb-6 brand-font bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">
+                        QUEL
+                    </h1>
+                    <p class="text-xl md:text-2xl text-gray-300 font-light max-w-2xl mx-auto mb-10 tracking-widest uppercase">
+                        The Source of Creation.
+                    </p>
+                </div>
+
+                <div ref="searchRef" class="physics-element hero-input-container group">
+                    <input v-model="searchQuery" @keyup.enter="scrollToAllPens" type="text" class="hero-input" placeholder="Search for sources...">
+                    <div class="absolute right-[6%] top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-indigo-400 transition-colors">
+                        <i class="fas fa-search text-xl"></i>
+                    </div>
+                </div>
+
+                <div class="scroll-down" @click="scrollToTrending">
+                    <div class="flex flex-col items-center gap-2 text-gray-500 hover:text-white transition-colors">
+                        <span class="text-xs uppercase tracking-widest">Start Exploring</span>
+                        <i class="fas fa-chevron-down text-lg"></i>
+                    </div>
+                </div>
+            </header>
+
+            <div class="max-w-7xl mx-auto px-6 py-12">
+                
+                <section id="trending-grid" class="mb-10 pt-10">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="text-3xl font-bold text-white flex items-center gap-3 brand-font">
+                                <i class="fas fa-fire text-orange-500"></i> Trending Sources
+                            </h2>
+                            <p class="text-gray-400 text-sm mt-2">Curated selection of the best works.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div v-for="project in trendingProjects" :key="project.id" class="glass-card overflow-hidden cursor-pointer group flex flex-col h-full" @click="openProject(project)">
+                            <div class="h-52 bg-gray-900 relative overflow-hidden border-b border-gray-800">
+                                <iframe :srcdoc="getProjectPreview(project)" class="project-preview pointer-events-none opacity-90 transition-opacity"></iframe>
+                                <div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-xs font-bold text-orange-400 border border-orange-500/30">
+                                    <i class="fas fa-star mr-1"></i> Featured
+                                </div>
+                            </div>
+                            <div class="p-6 flex-1 flex flex-col">
+                                <h3 class="text-xl font-bold text-white truncate mb-2">{{ project.title }}</h3>
+                                <div class="flex gap-2 mb-4">
+                                    <span class="text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300">{{ project.category }}</span>
+                                </div>
+                                <div class="flex items-center justify-between pt-4 border-t border-gray-700/50 mt-auto">
+                                    <div class="flex items-center gap-2">
+                                        <img :src="project.author.avatar" class="w-6 h-6 rounded-full ring-2 ring-gray-700" :alt="project.author.name">
+                                        <span class="text-xs text-gray-300 font-medium">{{ project.author.name }}</span>
+                                    </div>
+                                    <span class="text-gray-500 text-xs"><i class="fas fa-heart mr-1"></i>{{ project.likes }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div v-if="user.tier === 'free'" class="ad-banner">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-widest border border-gray-600 px-2 py-1 rounded mb-4 inline-block">Advertisement</span>
+                    <h3 class="text-2xl font-bold text-white mb-2">Unlock Your Potential with QUEL Pro</h3>
+                    <p class="text-gray-400 mb-6 max-w-xl mx-auto">Get private sources, asset hosting, and real-time collaboration tools. Join the creators shaping the future.</p>
+                    <button @click="showPricingModal = true" class="px-6 py-2 rounded-full bg-white text-gray-900 font-bold hover:bg-gray-200 transition">Remove Ads</button>
+                </div>
+
+                <section id="all-pens-grid" class="mt-20">
+                    <div class="section-header flex-col md:flex-row gap-4 items-start md:items-end">
+                        <div>
+                            <h2 class="text-3xl font-bold text-white flex items-center gap-3 brand-font">
+                                <i class="fas fa-globe-americas text-blue-500"></i> Community Sources
+                            </h2>
+                            <p class="text-gray-400 text-sm mt-2">Explore public creations.</p>
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-2">
+                            <button v-for="cat in categories" :key="cat" @click="selectedCategory = cat; visibleCount = 6" :class="['category-pill', selectedCategory === cat ? 'active' : '']">
+                                {{ cat }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="filteredAllProjects.length === 0" class="text-center py-24 bg-gray-900/30 rounded-2xl border border-dashed border-gray-700 backdrop-blur-sm">
+                        <i class="fas fa-search text-5xl text-gray-700 mb-4 block"></i>
+                        <h3 class="text-xl font-bold text-gray-400">No sources found</h3>
+                    </div>
+
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div v-for="project in visibleProjects" :key="project.id" class="glass-card overflow-hidden cursor-pointer group flex flex-col h-full" @click="openProject(project)">
+                            <div class="h-52 bg-gray-900 relative overflow-hidden border-b border-gray-800">
+                                <iframe :srcdoc="getProjectPreview(project)" class="project-preview pointer-events-none opacity-90 transition-opacity"></iframe>
+                                <div v-if="project.isPrivate" class="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-xs font-bold text-indigo-400 border border-indigo-500/30">
+                                    <i class="fas fa-lock mr-1"></i> Private
+                                </div>
+                            </div>
+                            <div class="p-6 flex-1 flex flex-col">
+                                <div class="flex justify-between items-start mb-3">
+                                    <h3 class="text-lg font-bold text-white truncate flex-1">{{ project.title }}</h3>
+                                    <button v-if="!project.isSystem" @click.stop="deleteProject(project.id)" class="text-gray-500 hover:text-red-500 transition-colors p-1" title="Delete Source">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                                <div class="flex gap-2 mb-3">
+                                    <span class="text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300 border border-gray-600">{{ project.category }}</span>
+                                </div>
+                                <div class="flex items-center justify-between pt-4 border-t border-gray-700/50 mt-auto">
+                                    <div class="flex items-center gap-2">
+                                        <img :src="project.author.avatar" class="w-6 h-6 rounded-full ring-2 ring-gray-700" :alt="project.author.name">
+                                        <span class="text-xs text-gray-300 font-medium">{{ project.author.name }}</span>
+                                    </div>
+                                    <div class="flex items-center gap-3 text-gray-500 text-xs">
+                                        <span><i class="fas fa-heart mr-1"></i>{{ project.likes }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="filteredAllProjects.length > visibleCount" class="mt-12 text-center">
+                        <button @click="loadMore" class="px-8 py-3 rounded-full bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white font-semibold transition shadow-lg hover:shadow-xl">
+                            View More Sources <i class="fas fa-chevron-down ml-2"></i>
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <transition name="fade">
+                <div v-if="showEditor" class="fixed inset-0 z-[200] bg-[#1a1a2e] flex flex-col">
+                    <div class="bg-[#1a1a2e] border-b border-gray-700 px-6 py-4 flex items-center justify-between shadow-lg relative z-50">
+                        <div class="flex items-center gap-4">
+                            <button @click="closeEditor" class="px-4 py-2 rounded-lg hover:bg-gray-800 transition text-gray-300">
+                                <i class="fas fa-arrow-left mr-2"></i> Back
+                            </button>
+                            <div class="h-6 w-px bg-gray-700"></div>
+                            <input v-model="currentProject.title" class="bg-transparent text-lg text-white font-bold outline-none focus:text-indigo-400 transition-colors" placeholder="Untitled Source">
+                            
+                            <button @click="togglePrivacy" :disabled="user.tier === 'free'" class="p-2 rounded-lg hover:bg-gray-800 transition" :class="currentProject.isPrivate ? 'text-indigo-400' : 'text-gray-500'" :title="user.tier === 'free' ? 'Upgrade for private sources' : 'Toggle privacy'">
+                                <i :class="currentProject.isPrivate ? 'fas fa-lock' : 'fas fa-lock-open'"></i>
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <button @click="inviteCollaborator" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 relative">
+                                <i class="fas fa-user-plus"></i>
+                                <span v-if="collaborators.length > 0" class="absolute -top-1 -right-1 bg-green-500 text-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{{ collaborators.length }}</span>
+                            </button>
+
+                            <button @click="openAssetModal" class="p-2 sm:px-4 sm:py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition text-white font-medium border border-gray-700 flex items-center gap-2">
+                                <i class="fas fa-cloud-upload-alt"></i> <span class="hidden sm:inline">Assets</span>
+                            </button>
+
+                            <button @click="toggleAiPanel" class="relative p-2 sm:px-4 sm:py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition text-white font-medium border border-gray-700 flex items-center gap-2">
+                                <i class="fas fa-robot text-indigo-400"></i>
+                                <span class="hidden sm:inline">AI Assistant</span>
+                                <span v-if="hasError" class="absolute top-1 right-1 pulse-dot"></span>
+                            </button>
+
+                            <button @click="saveProject" class="p-2 sm:px-4 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 transition text-white font-semibold shadow-lg shadow-green-500/20">
+                                <i class="fas fa-save sm:mr-2"></i><span class="hidden sm:inline">Save</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div :class="['ai-panel', { 'open': showAiPanel }]">
+                        <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
+                            <span class="font-bold text-indigo-400 flex items-center gap-2"><i class="fas fa-brain"></i> Code Copilot</span>
+                            <button @click="showAiPanel = false" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+                        </div>
+                        
+                        <div v-if="user.tier !== 'pro_plus'" class="flex-1 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+                            <div class="absolute inset-0 bg-indigo-900/20 backdrop-blur-sm z-0"></div>
+                            <div class="relative z-10">
+                                <i class="fas fa-lock text-5xl text-gray-500 mb-4"></i>
+                                <h4 class="text-xl font-bold text-white mb-2">Unlock AI Assistant</h4>
+                                <p class="text-gray-400 text-sm mb-6">Real-time debugging and code generation available on Pro+ plan.</p>
+                                <button @click="showPricingModal = true" class="px-6 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold shadow-lg">Upgrade to Pro+</button>
+                            </div>
+                        </div>
+
+                        <div v-else class="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+                            <div class="bg-gray-800/80 p-3 rounded mb-2 border border-gray-700">
+                                <label class="text-xs text-gray-400 mb-1 block">Groq API Key (Llama 3)</label>
+                                <input type="password" v-model="groqApiKey" @change="saveApiKey" placeholder="gsk_..." class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-indigo-500 outline-none">
+                            </div>
+                            <div class="bg-gray-800/50 p-2 rounded mb-2">
+                                <textarea v-model="aiPrompt" placeholder="Describe an animation to generate..." class="w-full bg-transparent text-sm text-white outline-none resize-none h-16"></textarea>
+                                <button @click="generateCode" :disabled="aiLoading" class="w-full mt-2 py-1 bg-indigo-600 hover:bg-indigo-700 rounded text-xs font-bold transition flex justify-center items-center gap-2 disabled:opacity-50">
+                                    <span v-if="aiLoading"><i class="fas fa-circle-notch fa-spin"></i> Thinking...</span>
+                                    <span v-else>Generate Code</span>
+                                </button>
+                            </div>
+                            <div v-if="!hasError && aiMessages.length === 0" class="ai-message ai"><i class="fas fa-check-circle mr-2 text-green-400"></i> Standing by.</div>
+                            <div v-if="aiDebugging" class="ai-message ai"><i class="fas fa-circle-notch fa-spin mr-2"></i> Analyzing Error...</div>
+                            <div v-for="(msg, index) in aiMessages" :key="index" :class="['ai-message', msg.type === 'error' ? 'error-card' : 'ai']">
+                                <div class="font-bold mb-1 text-xs uppercase opacity-75"><i :class="msg.type === 'error' ? 'fas fa-bug' : 'fas fa-lightbulb'"></i> {{ msg.title }}</div>
+                                {{ msg.text }}
+                                <div v-if="msg.line" class="mt-2 text-xs font-mono bg-black/20 p-1 rounded">Line {{ msg.line }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 flex editor-split overflow-hidden relative z-10">
+                        <div class="flex-1 flex flex-col bg-[#1e1e1e]">
+                            <div class="flex bg-[#1a1a2e] border-b border-gray-800">
+                                <button @click="activeTab = 'html'" :class="activeTab === 'html' ? 'tab-active' : 'tab-inactive'" class="flex-1 px-4 py-3 font-semibold transition flex items-center justify-center gap-2 text-sm text-gray-300"><i class="fab fa-html5 text-orange-500"></i> HTML</button>
+                                <button @click="activeTab = 'css'" :class="activeTab === 'css' ? 'tab-active' : 'tab-inactive'" class="flex-1 px-4 py-3 font-semibold transition flex items-center justify-center gap-2 text-sm text-gray-300"><i class="fab fa-css3-alt text-blue-500"></i> CSS</button>
+                                <button @click="activeTab = 'js'" :class="activeTab === 'js' ? 'tab-active' : 'tab-inactive'" class="flex-1 px-4 py-3 font-semibold transition flex items-center justify-center gap-2 text-sm text-gray-300"><i class="fab fa-js text-yellow-500"></i> JS</button>
+                            </div>
+                            <div class="flex-1 relative">
+                                <textarea v-show="activeTab === 'html'" v-model="currentProject.html" @input="debouncedUpdate" class="code-editor absolute inset-0"></textarea>
+                                <textarea v-show="activeTab === 'css'" v-model="currentProject.css" @input="debouncedUpdate" class="code-editor absolute inset-0"></textarea>
+                                <textarea v-show="activeTab === 'js'" v-model="currentProject.js" @input="debouncedUpdate" class="code-editor absolute inset-0"></textarea>
+                            </div>
+                        </div>
+                        <div class="flex-1 bg-gray-900 border-l border-gray-700 flex flex-col">
+                            <div class="bg-[#1a1a2e] px-4 py-2 border-b border-gray-800 flex items-center justify-between h-[50px]">
+                                <span class="text-xs font-bold uppercase tracking-widest text-gray-500">Live Preview</span>
+                                <button @click="refreshPreview" class="text-gray-400 hover:text-white transition"><i class="fas fa-sync-alt"></i></button>
+                            </div>
+                            <div class="flex-1 overflow-hidden bg-white relative">
+                                <iframe ref="previewIframe" :srcdoc="previewContent" class="preview-frame"></iframe>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </transition>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3.3.4/dist/vue.global.js"></script>
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/shader.js"></script>
+    <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
