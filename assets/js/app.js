@@ -1,38 +1,67 @@
+// assets/js/app.js
+
+// 1. Firebase Fonksiyonlarını İçe Aktarıyoruz
+import { 
+    auth, db, provider, 
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged,
+    collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, setDoc 
+} from './firebase.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     const { createApp } = Vue;
-    const STORAGE_KEY = 'quel_projects_v3'; 
-    const API_KEY_STORAGE = 'quel_groq_key';
+    const API_KEY_STORAGE = 'quel_groq_key'; // API anahtarını yerelde tutmaya devam ediyoruz (daha pratik)
 
+    // Varsayılan sistem projeleri (Veritabanı boşsa veya çıkış yapınca görünsün diye)
     const defaultProjects = [
-        { id: 1, isSystem: true, category: 'Animation', title: 'Neon Glow Button', description: 'Stunning neon glow effects.', html: `<div class="container">\n  <button class="neon-button">Hover Me</button>\n</div>`, css: `body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #0a0a0a; font-family: sans-serif; }\n.neon-button { padding: 20px 50px; font-size: 24px; color: #00ffff; background: transparent; border: 3px solid #00ffff; border-radius: 50px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }\n.neon-button:hover { background: #00ffff; color: #0a0a0a; box-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; }`, js: '', author: { name: 'Alex Chen', avatar: 'https://ui-avatars.com/api/?name=Alex+Chen&background=ff6b6b&color=fff' }, likes: 342, views: 1205 },
-        { id: 2, isSystem: true, category: 'Layout', title: 'CSS Spinner', description: 'Smooth rotating loader.', html: `<div class="spinner"></div>`, css: `body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1a2e; }\n.spinner { width: 80px; height: 80px; border: 8px solid rgba(255,255,255,0.1); border-top: 8px solid #6366f1; border-radius: 50%; animation: spin 1s linear infinite; }\n@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`, js: '', author: { name: 'Sarah Miller', avatar: 'https://ui-avatars.com/api/?name=Sarah+Miller&background=4ecdc4&color=fff' }, likes: 567, views: 2341 }
+        { id: 'sys_1', isSystem: true, category: 'Animation', title: 'Neon Glow Button', description: 'Stunning neon glow effects.', html: `<div class="container">\n  <button class="neon-button">Hover Me</button>\n</div>`, css: `body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #0a0a0a; font-family: sans-serif; }\n.neon-button { padding: 20px 50px; font-size: 24px; color: #00ffff; background: transparent; border: 3px solid #00ffff; border-radius: 50px; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }\n.neon-button:hover { background: #00ffff; color: #0a0a0a; box-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; }`, js: '', author: { name: 'Alex Chen', avatar: 'https://ui-avatars.com/api/?name=Alex+Chen&background=ff6b6b&color=fff' }, likes: 342, views: 1205 },
+        { id: 'sys_2', isSystem: true, category: 'Layout', title: 'CSS Spinner', description: 'Smooth rotating loader.', html: `<div class="spinner"></div>`, css: `body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1a2e; }\n.spinner { width: 80px; height: 80px; border: 8px solid rgba(255,255,255,0.1); border-top: 8px solid #6366f1; border-radius: 50%; animation: spin 1s linear infinite; }\n@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`, js: '', author: { name: 'Sarah Miller', avatar: 'https://ui-avatars.com/api/?name=Sarah+Miller&background=4ecdc4&color=fff' }, likes: 567, views: 2341 }
     ];
 
     createApp({
         data() {
             return {
-                user: { tier: 'free' },
+                // User objesini Firebase'e uygun hale getirdik
+                user: { uid: null, email: '', name: 'Guest', avatar: '', tier: 'free' },
+                
                 assetStorage: { used: 150, limit: 2 },
                 assets: [],
                 collaborators: [],
+                
                 isLoggedIn: false,
                 showAuthModal: false, showPricingModal: false, showAssetModal: false, showCollabModal: false,
+                
+                // Auth States
                 authTab: 'login', authEmail: '', authPassword: '', authLoading: false, authError: '',
                 failedAttempts: 0, isLockedOut: false, lockoutCountdown: 0,
-                showEditor: false, showAiPanel: false, hasError: false, aiMessages: [], aiPrompt: '', aiLoading: false, aiDebugging: false, groqApiKey: '',
+                
+                // Editor & AI States
+                showEditor: false, showAiPanel: false, hasError: false, 
+                aiMessages: [], aiPrompt: '', aiLoading: false, aiDebugging: false, 
+                groqApiKey: localStorage.getItem(API_KEY_STORAGE) || '',
+                
                 searchQuery: '', showUserMenu: false, activeTab: 'html',
-                currentProject: { id: null, title: '', html: '', css: '', js: '', description: '', category: 'General', author: {}, likes: 0, isPrivate: false },
-                previewContent: '', debounceTimer: null, projects: [],
+                
+                // Project Data
+                projects: [...defaultProjects],
+                currentProject: { id: null, title: 'Untitled', html: '', css: '', js: '', description: '', category: 'General', author: {}, likes: 0, isPrivate: false },
+                previewContent: '', debounceTimer: null,
                 categories: ['All', 'Animation', 'Layout', 'Game', 'AI', 'General'],
                 selectedCategory: 'All', visibleCount: 6,
+                
                 showToast: false, toastMessage: '', toastType: 'success',
-                physicsEngine: null
+                physicsEngine: null,
+                isCreatingNew: false, pendingProject: null // Login sonrası işlem için
             };
         },
         computed: {
-            trendingProjects() { return this.projects.filter(p => p.isSystem).slice(0, 3); },
+            trendingProjects() { 
+                // Sistem projeleri veya çok like alanlar
+                return this.projects.slice(0, 3); 
+            },
             filteredAllProjects() {
-                let result = this.projects.filter(p => !p.isPrivate);
+                // Sadece Public olanları veya benim olanları göster
+                let result = this.projects.filter(p => !p.isPrivate || p.uid === this.user.uid);
+                
                 if (this.searchQuery) {
                     const q = this.searchQuery.toLowerCase();
                     result = result.filter(p => p.title.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q)));
@@ -41,14 +70,160 @@ document.addEventListener('DOMContentLoaded', () => {
                 return result;
             },
             visibleProjects() { return this.filteredAllProjects.slice(0, this.visibleCount); },
-            maxCollaborators() { return this.user.tier === 'pro' ? 2 : (this.user.tier === 'pro_plus' ? 4 : 0); },
-            filteredProjects() {
-                let result = this.trendingProjects;
-                if(this.searchQuery) result = this.projects.filter(p => p.title.toLowerCase().includes(this.searchQuery.toLowerCase()));
-                return result;
-            }
+            maxCollaborators() { return this.user.tier === 'pro' ? 2 : (this.user.tier === 'pro_plus' ? 4 : 0); }
         },
         methods: {
+            // --- FIREBASE AUTHENTICATION ---
+            async handleLogin() {
+                this.authLoading = true; this.authError = '';
+                try {
+                    await signInWithEmailAndPassword(auth, this.authEmail, this.authPassword);
+                    // Başarılı giriş (auth listener yakalayacak)
+                    this.showAuthModal = false;
+                    this.showToastNotification('Welcome back!');
+                } catch (error) {
+                    this.authError = "Login Failed: " + error.message;
+                } finally { this.authLoading = false; }
+            },
+            async handleRegister() {
+                this.authLoading = true; this.authError = '';
+                try {
+                    const res = await createUserWithEmailAndPassword(auth, this.authEmail, this.authPassword);
+                    // Yeni kullanıcı verisini DB'ye de yazabiliriz (opsiyonel)
+                    this.showAuthModal = false;
+                    this.showToastNotification('Account created! Welcome.');
+                } catch (error) {
+                    this.authError = "Register Failed: " + error.message;
+                } finally { this.authLoading = false; }
+            },
+            async handleSocialLogin() {
+                this.authLoading = true;
+                try {
+                    await signInWithPopup(auth, provider); // GitHub Popup
+                    this.showAuthModal = false;
+                    this.showToastNotification('Connected with GitHub!');
+                } catch (error) {
+                    this.authError = error.message;
+                } finally { this.authLoading = false; }
+            },
+            async logout() {
+                await signOut(auth);
+                this.showToastNotification('Logged out successfully');
+                this.showUserMenu = false;
+                // Listener (onAuthStateChanged) state'i sıfırlayacak
+            },
+
+            // --- FIREBASE DATABASE (FIRESTORE) ---
+            async loadProjects() {
+                // Varsayılanları her zaman koy
+                let loadedProjects = [...defaultProjects];
+
+                if (this.user.uid) {
+                    try {
+                        // Sadece bu kullanıcının projelerini çekiyoruz
+                        const q = query(collection(db, "projects"), where("uid", "==", this.user.uid));
+                        const querySnapshot = await getDocs(q);
+                        const userProjects = [];
+                        querySnapshot.forEach((doc) => {
+                            userProjects.push({ id: doc.id, ...doc.data() });
+                        });
+                        loadedProjects = [...userProjects, ...defaultProjects];
+                    } catch (e) {
+                        console.error("Error loading projects:", e);
+                    }
+                }
+                this.projects = loadedProjects;
+            },
+            
+            async saveProject() {
+                if (!this.isLoggedIn) { 
+                    this.pendingProject = this.currentProject; // Login sonrası kaydetmek için sakla
+                    this.showAuthModal = true; 
+                    return; 
+                }
+
+                this.showToastNotification('Saving to Cloud...', 'info');
+
+                const projectData = {
+                    title: this.currentProject.title,
+                    html: this.currentProject.html,
+                    css: this.currentProject.css,
+                    js: this.currentProject.js,
+                    category: this.currentProject.category,
+                    description: this.currentProject.description || '',
+                    isPrivate: this.currentProject.isPrivate,
+                    uid: this.user.uid, // Sahibi kim?
+                    author: { 
+                        name: this.user.name, 
+                        avatar: this.user.avatar 
+                    },
+                    updatedAt: new Date().toISOString(),
+                    likes: this.currentProject.likes || 0,
+                    views: this.currentProject.views || 0
+                };
+
+                try {
+                    if (this.currentProject.id && !this.currentProject.isSystem && typeof this.currentProject.id === 'string') {
+                        // Var olan projeyi güncelle (ID string ise Firestore ID'sidir)
+                        const projectRef = doc(db, "projects", this.currentProject.id);
+                        await updateDoc(projectRef, projectData);
+                        
+                        // Local state güncelle
+                        const idx = this.projects.findIndex(p => p.id === this.currentProject.id);
+                        if(idx !== -1) this.projects[idx] = { ...this.projects[idx], ...projectData };
+                        
+                        this.showToastNotification('Project Updated!');
+                    } else {
+                        // Yeni proje oluştur (veya sistem projesini kopyala)
+                        const docRef = await addDoc(collection(db, "projects"), projectData);
+                        
+                        const newProject = { id: docRef.id, ...projectData };
+                        this.currentProject = newProject; // Artık ID'miz var
+                        this.projects.unshift(newProject);
+                        
+                        this.showToastNotification('Project Created!');
+                    }
+                } catch (e) {
+                    console.error("Save Error:", e);
+                    this.showToastNotification('Error saving project', 'delete');
+                }
+            },
+            
+            async deleteProject(id) {
+                if(!confirm('Delete this project permanently?')) return;
+                
+                try {
+                    await deleteDoc(doc(db, "projects", id));
+                    this.projects = this.projects.filter(p => p.id !== id);
+                    this.showToastNotification('Project deleted', 'delete');
+                    if(this.showEditor && this.currentProject.id === id) this.closeEditor();
+                } catch (e) {
+                    this.showToastNotification('Error deleting', 'delete');
+                }
+            },
+
+            // --- UI Methods ---
+            createNewPen() {
+                if (!this.isLoggedIn) { this.isCreatingNew = true; this.showAuthModal = true; return; }
+                this.currentProject = { 
+                    id: null, 
+                    title: 'Untitled Source', 
+                    html: '\n<div class="center">\n  <h1>Hello World</h1>\n</div>', 
+                    css: 'body { \n  background: #1a1a2e; \n  color: white; \n  display: flex; \n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n  margin: 0;\n  font-family: sans-serif;\n}', 
+                    js: '', 
+                    category: 'General', 
+                    author: { name: this.user.name }, 
+                    isPrivate: false 
+                };
+                this.showEditor = true; 
+                this.updatePreview();
+            },
+            openProject(p) {
+                // Derin kopya al
+                this.currentProject = JSON.parse(JSON.stringify(p)); 
+                this.showEditor = true; 
+                this.updatePreview();
+            },
             switchTier(tier) {
                 this.user.tier = tier;
                 this.assetStorage.limit = tier === 'pro' ? 2 : (tier === 'pro_plus' ? 10 : 0);
@@ -78,59 +253,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.showToastNotification('Invited!');
             },
             removeCollaborator(id) { this.collaborators = this.collaborators.filter(c => c.id !== id); },
-            checkAuth() { if (localStorage.getItem('quel_auth_token')) this.isLoggedIn = true; if(localStorage.getItem(API_KEY_STORAGE)) this.groqApiKey = localStorage.getItem(API_KEY_STORAGE); },
-            handleLogin() {
-                if (this.authPassword !== 'admin123') { this.failedAttempts++; if(this.failedAttempts>=3) this.isLockedOut=true; return; }
-                this.isLoggedIn = true; this.showAuthModal = false; localStorage.setItem('quel_auth_token', 'token');
-                if (this.isCreatingNew) this.createNewPen();
-                else if (this.pendingProject) { this.openProject(this.pendingProject); this.pendingProject = null; }
-            },
-            logout() { this.isLoggedIn = false; localStorage.removeItem('quel_auth_token'); this.user.tier = 'free'; this.showUserMenu = false; },
-            loadProjects() {
-                const stored = localStorage.getItem(STORAGE_KEY);
-                this.projects = stored ? JSON.parse(stored) : [...defaultProjects];
-            },
-            saveToLocalStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.projects)); },
             saveApiKey() { localStorage.setItem(API_KEY_STORAGE, this.groqApiKey); this.showToastNotification('API Key Saved'); },
             showToastNotification(msg, type='success') { this.toastMessage = msg; this.toastType = type; this.showToast = true; setTimeout(() => this.showToast = false, 3000); },
+            
+            // Navigation
             scrollToProjects() { document.getElementById('trending-grid')?.scrollIntoView({ behavior: 'smooth' }); },
             scrollToTrending() { document.getElementById('trending-grid')?.scrollIntoView({ behavior: 'smooth' }); },
             scrollToAllPens() { document.getElementById('all-pens-grid')?.scrollIntoView({ behavior: 'smooth' }); },
             scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); },
-            closeEditor() { this.showEditor = false; },
+            closeEditor() { this.showEditor = false; this.loadProjects(); },
             loadMore() { this.visibleCount += 6; },
-            createNewPen() {
-                if (!this.isLoggedIn) { this.isCreatingNew = true; this.showAuthModal = true; return; }
-                this.currentProject = { id: Date.now(), title: 'Untitled', html: '<h1>Hello</h1>', css: 'body{background:#222;color:white;display:grid;place-items:center;height:100vh}', js: '', category: 'General', author: {name:'Demo'}, isPrivate: false };
-                this.showEditor = true; this.updatePreview();
-            },
-            openProject(p) {
-                if (!this.isLoggedIn) { this.pendingProject = p; this.showAuthModal = true; return; }
-                this.currentProject = JSON.parse(JSON.stringify(p)); this.showEditor = true; this.updatePreview();
-            },
-            saveProject() {
-                if (this.currentProject.isSystem) {
-                    const forked = JSON.parse(JSON.stringify(this.currentProject)); forked.id = Date.now(); forked.title = 'Fork of ' + forked.title; delete forked.isSystem;
-                    this.projects.unshift(forked); this.currentProject = forked;
-                } else {
-                    const idx = this.projects.findIndex(p => p.id === this.currentProject.id);
-                    if (idx !== -1) this.projects[idx] = JSON.parse(JSON.stringify(this.currentProject));
-                    else this.projects.unshift(JSON.parse(JSON.stringify(this.currentProject)));
-                }
-                this.saveToLocalStorage(); this.showToastNotification('Saved!');
-            },
-            deleteProject(id) { if(confirm('Delete?')) { this.projects = this.projects.filter(p => p.id !== id); this.saveToLocalStorage(); } },
-            forkProject() {
-                const forked = JSON.parse(JSON.stringify(this.currentProject));
-                forked.id = Date.now(); forked.title = 'Fork of ' + forked.title;
-                delete forked.isSystem; 
-                this.projects.unshift(forked);
-                this.currentProject = forked;
-                this.saveToLocalStorage();
-                this.showToastNotification('Forked successfully!');
-            },
-            
-            // --- AI ---
+
+            // --- AI & Iframe ---
             toggleAiPanel() { this.showAiPanel = !this.showAiPanel; },
             handleIframeMessage(event) {
                 if (event.data && event.data.type === 'code-error') {
@@ -186,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             debouncedUpdate() { clearTimeout(this.debounceTimer); this.debounceTimer = setTimeout(() => this.updatePreview(), 1000); },
             refreshPreview() { this.updatePreview(); },
 
-            // --- ANTIGRAVITY PHYSICS ---
+            // --- ANTIGRAVITY PHYSICS (Senin Kodun) ---
             initPhysics() {
                 if(!this.$refs.titleRef || !this.$refs.searchRef) return;
                 const Engine = Matter.Engine, World = Matter.World, Bodies = Matter.Bodies, Body = Matter.Body, Mouse = Matter.Mouse, MouseConstraint = Matter.MouseConstraint;
@@ -251,13 +385,35 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         mounted() {
-            this.checkAuth(); 
-            this.loadProjects();
-            setTimeout(() => { this.initPhysics(); }, 100);
+            // Firebase Listener: Kullanıcı giriş/çıkış durumunu anlık takip eder
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    this.isLoggedIn = true;
+                    this.user.uid = user.uid;
+                    this.user.email = user.email;
+                    this.user.name = user.displayName || user.email.split('@')[0];
+                    this.user.avatar = user.photoURL || `https://ui-avatars.com/api/?name=${this.user.name}&background=random`;
+                    this.loadProjects(); 
+                    
+                    // Bekleyen işlem varsa yap (Örn: Login olmadan create'e bastıysa)
+                    if (this.isCreatingNew) { this.createNewPen(); this.isCreatingNew = false; }
+                    if (this.pendingProject) { this.saveProject(); this.pendingProject = null; }
+                } else {
+                    this.isLoggedIn = false;
+                    this.user = { uid: null, name: 'Guest', tier: 'free' };
+                    this.projects = [...defaultProjects];
+                }
+            });
+
+            // Fizik motorunu başlat
+            setTimeout(() => { this.initPhysics(); }, 500);
+            
+            // Iframe mesajları (Hata yakalama)
             window.addEventListener('message', this.handleIframeMessage);
             document.addEventListener('click', (e) => { if (!e.target.closest('.relative')) this.showUserMenu = false; });
         },
         beforeUnmount() { window.removeEventListener('message', this.handleIframeMessage); }
     }).mount('#app');
-    console.log("Vue App Mounted with Antigravity");
+    
+    console.log("QUEL Firebase v1.0 Launched 🚀");
 });
