@@ -320,9 +320,10 @@ document.addEventListener('DOMContentLoaded', () => {
             debouncedUpdate() { clearTimeout(this.debounceTimer); this.debounceTimer = setTimeout(() => this.updatePreview(), 1000); },
             refreshPreview() { this.updatePreview(); },
 
-            // --- ANTIGRAVITY PHYSICS (Senin Kodun) ---
+            // --- ANTIGRAVITY PHYSICS (Düzeltilmiş Hali) ---
             initPhysics() {
                 if(!this.$refs.titleRef || !this.$refs.searchRef) return;
+                
                 const Engine = Matter.Engine, World = Matter.World, Bodies = Matter.Bodies, Body = Matter.Body, Mouse = Matter.Mouse, MouseConstraint = Matter.MouseConstraint;
                 const engine = Engine.create();
                 this.physicsEngine = engine;
@@ -347,7 +348,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let floor, ceiling, leftWall, rightWall;
                 const updateWalls = () => {
-                    World.remove(world, [floor, ceiling, leftWall, rightWall]);
+                    // --- DÜZELTME BURASI ---
+                    // Sadece duvarlar varsa sil
+                    if (floor) {
+                        World.remove(world, [floor, ceiling, leftWall, rightWall]);
+                    }
+                    // -----------------------
+                    
                     const w = window.innerWidth;
                     const h = window.innerHeight;
                     const wallOpts = { isStatic: true, render: { visible: false }, restitution: 1 };
