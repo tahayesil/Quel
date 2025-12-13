@@ -1,10 +1,33 @@
 // assets/js/firebase.js
 
-// Firebase kütüphanelerini yüklüyoruz
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// GitHub girişi için gerekli olan 'GithubAuthProvider' ve 'signInWithPopup' eklendi
+import { 
+    getAuth, 
+    createUserWithEmailAndPassword, 
+    signInWithEmailAndPassword, 
+    signOut, 
+    onAuthStateChanged, 
+    updateProfile,
+    GithubAuthProvider, // EKLENDI
+    signInWithPopup     // EKLENDI
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+import { 
+    getFirestore, 
+    collection, 
+    addDoc, 
+    getDocs, 
+    doc, 
+    deleteDoc, 
+    updateDoc, 
+    query, 
+    where, 
+    getDoc, 
+    setDoc 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// --- SENIN CONFIG BILGILERIN ---
 const firebaseConfig = {
   apiKey: "AIzaSyAiQBvNTcD1M9SzU04dLXwp2ayFvZ3trZg",
   authDomain: "quel-400b2.firebaseapp.com",
@@ -19,10 +42,15 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Bu fonksiyonları diğer dosyalarda kullanmak için dışa aktarıyoruz
+// GitHub Sağlayıcısını Tanımla (Eksik olan kısım burasıydı)
+const provider = new GithubAuthProvider();
+
+// Dışarı Aktar (Export)
 export { 
     auth, 
     db, 
+    provider, // ARTIK DISARI AKTARILIYOR
+    signInWithPopup, // ARTIK DISARI AKTARILIYOR
     createUserWithEmailAndPassword, 
     signInWithEmailAndPassword, 
     signOut, 

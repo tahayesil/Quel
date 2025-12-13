@@ -1,15 +1,16 @@
 // assets/js/app.js
 
 // 1. Firebase Fonksiyonlarını İçe Aktarıyoruz
-import { 
-    auth, db, provider, 
+import {
+    auth, db, provider,
     signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged,
-    collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, setDoc 
+    collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, setDoc
 } from './firebase.js';
 
+import { createApp } from 'https://unpkg.com/vue@3.3.4/dist/vue.esm-browser.js';
+
 document.addEventListener('DOMContentLoaded', () => {
-    const { createApp } = Vue;
-    const API_KEY_STORAGE = 'quel_groq_key'; 
+    const API_KEY_STORAGE = 'quel_groq_key';
 
     // Varsayılan sistem projeleri
     const defaultProjects = [
@@ -21,35 +22,35 @@ document.addEventListener('DOMContentLoaded', () => {
         data() {
             return {
                 user: { uid: null, email: '', name: 'Guest', avatar: '', tier: 'free' },
-                
+
                 assetStorage: { used: 150, limit: 2 },
                 assets: [],
                 collaborators: [],
-                
+
                 isLoggedIn: false,
                 showAuthModal: false, showPricingModal: false, showAssetModal: false, showCollabModal: false,
-                
+
                 // Auth States
                 authTab: 'login', authEmail: '', authPassword: '', authLoading: false, authError: '',
                 failedAttempts: 0, isLockedOut: false, lockoutCountdown: 0,
-                
+
                 // Editor & AI States
-                showEditor: false, showAiPanel: false, hasError: false, 
-                aiMessages: [], aiPrompt: '', aiLoading: false, aiDebugging: false, 
+                showEditor: false, showAiPanel: false, hasError: false,
+                aiMessages: [], aiPrompt: '', aiLoading: false, aiDebugging: false,
                 groqApiKey: localStorage.getItem(API_KEY_STORAGE) || '',
-                
+
                 searchQuery: '', showUserMenu: false, activeTab: 'html',
-                
+
                 // Project Data
                 projects: [...defaultProjects],
                 currentProject: { id: null, title: 'Untitled', html: '', css: '', js: '', description: '', category: 'General', author: {}, likes: 0, isPrivate: false },
                 previewContent: '', debounceTimer: null,
                 categories: ['All', 'Animation', 'Layout', 'Game', 'AI', 'General'],
                 selectedCategory: 'All', visibleCount: 6,
-                
+
                 showToast: false, toastMessage: '', toastType: 'success',
                 // physicsEngine sildik
-                isCreatingNew: false, pendingProject: null 
+                isCreatingNew: false, pendingProject: null
             };
         },
         computed: {
@@ -120,12 +121,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 this.projects = loadedProjects;
             },
-            
+
             async saveProject() {
-                if (!this.isLoggedIn) { 
-                    this.pendingProject = this.currentProject; 
-                    this.showAuthModal = true; 
-                    return; 
+                if (!this.isLoggedIn) {
+                    this.pendingProject = this.currentProject;
+                    this.showAuthModal = true;
+                    return;
                 }
                 this.showToastNotification('Saving to Cloud...', 'info');
 
@@ -149,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const projectRef = doc(db, "projects", this.currentProject.id);
                         await updateDoc(projectRef, projectData);
                         const idx = this.projects.findIndex(p => p.id === this.currentProject.id);
-                        if(idx !== -1) this.projects[idx] = { ...this.projects[idx], ...projectData };
+                        if (idx !== -1) this.projects[idx] = { ...this.projects[idx], ...projectData };
                         this.showToastNotification('Project Updated!');
                     } else {
                         const docRef = await addDoc(collection(db, "projects"), projectData);
@@ -163,30 +164,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.showToastNotification('Error saving project', 'delete');
                 }
             },
-            
+
             async deleteProject(id) {
-                if(!confirm('Delete this project permanently?')) return;
+                if (!confirm('Delete this project permanently?')) return;
                 try {
                     await deleteDoc(doc(db, "projects", id));
                     this.projects = this.projects.filter(p => p.id !== id);
                     this.showToastNotification('Project deleted', 'delete');
-                    if(this.showEditor && this.currentProject.id === id) this.closeEditor();
+                    if (this.showEditor && this.currentProject.id === id) this.closeEditor();
                 } catch (e) { this.showToastNotification('Error deleting', 'delete'); }
             },
 
             // --- UI Methods ---
             createNewPen() {
                 if (!this.isLoggedIn) { this.isCreatingNew = true; this.showAuthModal = true; return; }
-                this.currentProject = { 
-                    id: null, title: 'Untitled Source', 
-                    html: '\n<div class="center">\n  <h1>Hello World</h1>\n</div>', 
-                    css: 'body { \n  background: #1a1a2e; \n  color: white; \n  display: flex; \n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n  margin: 0;\n  font-family: sans-serif;\n}', 
-                    js: '', category: 'General', author: { name: this.user.name }, isPrivate: false 
+                this.currentProject = {
+                    id: null, title: 'Untitled Source',
+                    html: '\n<div class="center">\n  <h1>Hello World</h1>\n</div>',
+                    css: 'body { \n  background: #1a1a2e; \n  color: white; \n  display: flex; \n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n  margin: 0;\n  font-family: sans-serif;\n}',
+                    js: '', category: 'General', author: { name: this.user.name }, isPrivate: false
                 };
                 this.showEditor = true; this.updatePreview();
             },
             openProject(p) {
-                this.currentProject = JSON.parse(JSON.stringify(p)); 
+                this.currentProject = JSON.parse(JSON.stringify(p));
                 this.showEditor = true; this.updatePreview();
             },
             switchTier(tier) {
@@ -197,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             openAssetModal() { this.user.tier === 'free' ? this.showPricingModal = true : this.showAssetModal = true; },
             uploadAsset() {
-                const newAsset = { id: Date.now(), name: `img_${this.assets.length+1}.png`, size: 2.5 };
+                const newAsset = { id: Date.now(), name: `img_${this.assets.length + 1}.png`, size: 2.5 };
                 this.assets.push(newAsset); this.assetStorage.used += 2.5;
                 this.showToastNotification('Asset uploaded');
             },
@@ -219,8 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             removeCollaborator(id) { this.collaborators = this.collaborators.filter(c => c.id !== id); },
             saveApiKey() { localStorage.setItem(API_KEY_STORAGE, this.groqApiKey); this.showToastNotification('API Key Saved'); },
-            showToastNotification(msg, type='success') { this.toastMessage = msg; this.toastType = type; this.showToast = true; setTimeout(() => this.showToast = false, 3000); },
-            
+            showToastNotification(msg, type = 'success') { this.toastMessage = msg; this.toastType = type; this.showToast = true; setTimeout(() => this.showToast = false, 3000); },
+
             // Navigation
             scrollToProjects() { document.getElementById('trending-grid')?.scrollIntoView({ behavior: 'smooth' }); },
             scrollToTrending() { document.getElementById('trending-grid')?.scrollIntoView({ behavior: 'smooth' }); },
@@ -298,8 +299,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.user.email = user.email;
                     this.user.name = user.displayName || user.email.split('@')[0];
                     this.user.avatar = user.photoURL || `https://ui-avatars.com/api/?name=${this.user.name}&background=random`;
-                    this.loadProjects(); 
-                    
+                    this.loadProjects();
+
                     if (this.isCreatingNew) { this.createNewPen(); this.isCreatingNew = false; }
                     if (this.pendingProject) { this.saveProject(); this.pendingProject = null; }
                 } else {
@@ -315,6 +316,6 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         beforeUnmount() { window.removeEventListener('message', this.handleIframeMessage); }
     }).mount('#app');
-    
+
     console.log("QUEL Firebase v1.1 - Physics Removed, Waves Restored 🌊");
 });
