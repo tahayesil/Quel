@@ -297,6 +297,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // fizik motoru kalkınca otomatik olarak görünür hale gelecek.
         },
         mounted() {
+            // Vue mount olduktan hemen sonra shader'ı başlat
+            setTimeout(() => {
+                if (window.initShaderBackground) {
+                    window.initShaderBackground('hero-shader-canvas');
+                }
+            }, 100);
+
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     this.isLoggedIn = true;

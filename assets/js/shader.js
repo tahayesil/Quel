@@ -30,15 +30,15 @@ function initShaderBackground(canvasId) {
     }
 
     // Vertex Shader
-    const vsSource = \`
+    const vsSource = `
         attribute vec4 aVertexPosition;
         void main() {
             gl_Position = aVertexPosition;
         }
-    \`;
+    `;
 
     // Fragment shader source code (Hata vermemesi için precision eklendi)
-    const fsSource = \`
+    const fsSource = `
         precision highp float;
         uniform vec2 iResolution;
         uniform float iTime;
@@ -80,7 +80,7 @@ function initShaderBackground(canvasId) {
 
             gl_FragColor = vec4(color.rgb, 1.0);
         }
-    \`;
+    `;
 
     // Shader Derleme Yardımcısı
     const loadShader = (gl, type, source) => {
@@ -131,7 +131,7 @@ function initShaderBackground(canvasId) {
     function render() {
         resizeCanvas(); // Her karede boyutu kontrol et (Garanti olsun)
         gl.viewport(0, 0, canvas.width, canvas.height);
-        
+
         const currentTime = (Date.now() - startTime) / 1000;
 
         gl.clearColor(0.0, 0.0, 0.0, 0.0); // Transparent background
@@ -148,15 +148,16 @@ function initShaderBackground(canvasId) {
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         requestAnimationFrame(render);
     }
-    
+
     console.log("Shader render döngüsü başlıyor...");
     render();
 }
 
 // Sayfa yüklendiğinde başlat
-document.addEventListener('DOMContentLoaded', () => {
-    // Biraz gecikmeli başlat ki CSS tam otursun
-    setTimeout(() => {
-        initShaderBackground('hero-shader-canvas');
-    }, 100);
-});
+// Sayfa yüklendiğinde başlat (VUE tarafında mounted içinde çağrılacak)
+// document.addEventListener('DOMContentLoaded', () => {
+//     setTimeout(() => {
+//         initShaderBackground('hero-shader-canvas');
+//     }, 100);
+// });
+window.initShaderBackground = initShaderBackground; // Global erişim için garanti et
