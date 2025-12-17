@@ -1,13 +1,24 @@
 // assets/js/app.js
 
-// 1. Firebase Fonksiyonlarını İçe Aktarıyoruz
-import {
-    auth, db, provider,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged,
-    collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, setDoc
-} from './firebase.js';
-
 import { createApp } from 'https://unpkg.com/vue@3.3.4/dist/vue.esm-browser.js';
+import { auth, db, provider, githubProvider } from './firebase-config.js';
+import {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+    collection,
+    addDoc,
+    query,
+    where,
+    getDocs,
+    updateDoc,
+    deleteDoc,
+    doc
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
     const API_KEY_STORAGE = 'quel_groq_key';
@@ -34,22 +45,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 authTab: 'login', authEmail: '', authPassword: '', authLoading: false, authError: '',
                 failedAttempts: 0, isLockedOut: false, lockoutCountdown: 0,
 
-                // Editor & AI States
-                showEditor: false, showAiPanel: false, hasError: false,
-                aiMessages: [], aiPrompt: '', aiLoading: false, aiDebugging: false,
-                groqApiKey: localStorage.getItem(API_KEY_STORAGE) || '',
-
                 searchQuery: '', showUserMenu: false, activeTab: 'html',
 
                 // Project Data
                 projects: [...defaultProjects],
                 currentProject: { id: null, title: 'Untitled', html: '', css: '', js: '', description: '', category: 'General', author: {}, likes: 0, isPrivate: false },
-                previewContent: '', debounceTimer: null,
                 categories: ['All', 'Animation', 'Layout', 'Game', 'AI', 'General'],
                 selectedCategory: 'All', visibleCount: 6,
 
                 showToast: false, toastMessage: '', toastType: 'success',
-                // physicsEngine sildik
                 isCreatingNew: false, pendingProject: null
             };
         },
@@ -82,19 +86,20 @@ document.addEventListener('DOMContentLoaded', () => {
             async handleRegister() {
                 this.authLoading = true; this.authError = '';
                 try {
-                    const res = await createUserWithEmailAndPassword(auth, this.authEmail, this.authPassword);
+                    await createUserWithEmailAndPassword(auth, this.authEmail, this.authPassword);
                     this.showAuthModal = false;
                     this.showToastNotification('Account created! Welcome.');
                 } catch (error) {
                     this.authError = "Register Failed: " + error.message;
                 } finally { this.authLoading = false; }
             },
-            async handleSocialLogin() {
+            async handleSocialLogin(providerName) {
                 this.authLoading = true;
                 try {
-                    await signInWithPopup(auth, provider);
+                    const p = providerName === 'github' ? githubProvider : provider;
+                    await signInWithPopup(auth, p);
                     this.showAuthModal = false;
-                    this.showToastNotification('Connected with GitHub!');
+                    this.showToastNotification(`Connected with ${providerName === 'github' ? 'GitHub' : 'Google'}!`);
                 } catch (error) {
                     this.authError = error.message;
                 } finally { this.authLoading = false; }
@@ -122,7 +127,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             userProjects.push({ id: doc.id, ...doc.data() });
                         });
                         loadedProjects = [...userProjects, ...defaultProjects];
-                    } catch (e) { console.error("Error loading projects:", e); }
+                    } catch (e) {
+                        console.error("Error loading projects:", e);
+                    }
                 }
                 this.projects = loadedProjects;
             },
@@ -151,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 try {
-                    if (this.currentProject.id && !this.currentProject.isSystem && typeof this.currentProject.id === 'string') {
+                    if (this.currentProject.id && !this.currentProject.isSystem && typeof this.currentProject.id === 'string' && !this.currentProject.id.startsWith('local_')) {
                         const projectRef = doc(db, "projects", this.currentProject.id);
                         await updateDoc(projectRef, projectData);
                         const idx = this.projects.findIndex(p => p.id === this.currentProject.id);
@@ -166,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } catch (e) {
                     console.error("Save Error:", e);
-                    this.showToastNotification('Error saving project', 'delete');
+                    this.showToastNotification('Error saving project: ' + e.message, 'delete');
                 }
             },
 
@@ -177,26 +184,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.projects = this.projects.filter(p => p.id !== id);
                     this.showToastNotification('Project deleted', 'delete');
                     if (this.showEditor && this.currentProject.id === id) this.closeEditor();
-                } catch (e) { this.showToastNotification('Error deleting', 'delete'); }
+                } catch (e) {
+                    console.error(e);
+                    this.showToastNotification('Error deleting', 'delete');
+                }
             },
 
             // --- UI Methods ---
             createNewPen() {
-                if (!this.isLoggedIn) { this.isCreatingNew = true; this.showAuthModal = true; return; }
-                this.currentProject = {
-                    id: null, title: 'Untitled Source',
-                    html: '\n<div class="center">\n  <h1>Hello World</h1>\n</div>',
-                    css: 'body { \n  background: #1a1a2e; \n  color: white; \n  display: flex; \n  justify-content: center;\n  align-items: center;\n  height: 100vh;\n  margin: 0;\n  font-family: sans-serif;\n}',
-                    js: '', category: 'General', author: { name: this.user.name }, isPrivate: false
-                };
-                this.showEditor = true; this.updatePreview();
+                if (!this.isLoggedIn) {
+                    this.isCreatingNew = true;
+                    localStorage.setItem('quel_pending_create', 'true');
+                    this.showAuthModal = true;
+                    return;
+                }
+                window.location.href = 'editor.html?new=true';
             },
             openProject(p) {
-                this.currentProject = JSON.parse(JSON.stringify(p));
-                this.showEditor = true; this.updatePreview();
+                window.location.href = `editor.html?id=${p.id}`;
             },
             switchTier(tier) {
                 this.user.tier = tier;
+                localStorage.setItem('quel_user_tier', tier);
                 this.assetStorage.limit = tier === 'pro' ? 2 : (tier === 'pro_plus' ? 10 : 0);
                 this.showPricingModal = false;
                 this.showToastNotification(`Welcome to ${tier.toUpperCase()} Plan!`);
@@ -290,11 +299,6 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePreview() { this.hasError = false; this.aiMessages = []; this.previewContent = this.getProjectPreview(this.currentProject); },
             debouncedUpdate() { clearTimeout(this.debounceTimer); this.debounceTimer = setTimeout(() => this.updatePreview(), 1000); },
             refreshPreview() { this.updatePreview(); }
-
-            // --- FİZİK MOTORU (ANTIGRAVITY) SİLİNDİ ---
-            // Artık yazı ve search bar CSS ile ortada sabit duracak.
-            // Arka plandaki Shader (Waves) scripti index.html üzerinden çalıştığı için
-            // fizik motoru kalkınca otomatik olarak görünür hale gelecek.
         },
         mounted() {
             // Vue mount olduktan hemen sonra shader'ı başlat
@@ -321,7 +325,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     this.loadProjects();
 
-                    if (this.isCreatingNew) { this.createNewPen(); this.isCreatingNew = false; }
+                    // Check for pending actions from localStorage or memory
+                    if (this.isCreatingNew || localStorage.getItem('quel_pending_create') === 'true') {
+                        this.createNewPen();
+                        this.isCreatingNew = false;
+                        localStorage.removeItem('quel_pending_create');
+                    }
                     if (this.pendingProject) { this.saveProject(); this.pendingProject = null; }
                 } else {
                     this.isLoggedIn = false;
@@ -344,5 +353,5 @@ document.addEventListener('DOMContentLoaded', () => {
         beforeUnmount() { window.removeEventListener('message', this.handleIframeMessage); }
     }).mount('#app');
 
-    console.log("QUEL Firebase v1.1 - Physics Removed, Waves Restored 🌊");
+    console.log("QUEL Firebase v1.3 - GitHub Logic Added 🌊");
 });

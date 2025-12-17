@@ -1,17 +1,18 @@
-// NOT: Eğer import hatası alırsan index.html'deki <script type="module"> kısmını kontrol et.
-// import satırını sildik!
-const { createApp } = Vue; // Vue'yu globalden alıyoruz
+// assets/js/profile.js
+import { createApp } from 'https://unpkg.com/vue@3.3.4/dist/vue.esm-browser.js';
+import { auth, db } from './firebase-config.js';
+import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const STORAGE_KEY = 'quel_projects_v4'; // v3 değil v4 yaptık ki ana sayfayla uyumlu olsun
 const API_KEY_STORAGE = 'quel_groq_key';
 
 createApp({
     data() {
         return {
             user: {
-                name: 'Demo User',
-                email: 'demo@quel.io',
-                avatar: 'https://ui-avatars.com/api/?name=Demo+User&background=6366f1&color=fff',
+                name: 'Guest',
+                email: '',
+                avatar: 'https://ui-avatars.com/api/?name=Guest&background=6366f1&color=fff',
                 tier: 'free'
             },
             projects: [],
@@ -28,60 +29,50 @@ createApp({
     },
     computed: {
         userProjects() {
-            // Sadece sistem projesi olmayanlar (Kullanıcının oluşturdukları)
-            return this.projects.filter(p => !p.isSystem);
+            // Sadece sistem projesi olmayanlar
+            return this.projects; // Firebase'den zaten sadece user projects geliyor
         },
         publicProjects() {
-            return this.userProjects.filter(p => !p.isPrivate);
+            return this.projects.filter(p => !p.isPrivate);
         },
         privateProjects() {
-            return this.userProjects.filter(p => p.isPrivate);
+            return this.projects.filter(p => p.isPrivate);
         },
         filteredProjects() {
             return this.activeTab === 'public' ? this.publicProjects : this.privateProjects;
         },
         totalLikes() {
-            return this.userProjects.reduce((sum, p) => sum + (p.likes || 0), 0);
+            return this.projects.reduce((sum, p) => sum + (p.likes || 0), 0);
         },
         storageLimit() {
             return this.user.tier === 'pro' ? 2 : (this.user.tier === 'pro_plus' ? 10 : 0.5);
         },
         storageUsed() {
             // Mock hesaplama
-            return (this.userProjects.length * 0.05).toFixed(2);
+            return (this.projects.length * 0.05).toFixed(2);
         }
     },
     methods: {
-        checkAuth() {
-            const token = localStorage.getItem('quel_auth_token');
-            if (!token) {
-                window.location.href = 'index.html'; // Giriş yoksa ana sayfaya at
-            }
-
-            // LocalStorage'dan kullanıcı verilerini çek
-            const savedTier = localStorage.getItem('quel_user_tier');
-            if (savedTier) this.user.tier = savedTier;
-
-            const savedName = localStorage.getItem('quel_user_name');
-            if (savedName) this.user.name = savedName;
-
-            const savedEmail = localStorage.getItem('quel_user_email');
-            if (savedEmail) this.user.email = savedEmail;
-
-            const savedAvatar = localStorage.getItem('quel_user_avatar');
-            if (savedAvatar) this.user.avatar = savedAvatar;
-
-            // API Key kontrolü
+        async checkAuth() {
+            // Vue mounted icinde onAuthStateChanged kullanacagiz
             const key = localStorage.getItem(API_KEY_STORAGE);
             if (key) {
                 this.apiKeyInput = key;
                 this.hasApiKey = true;
             }
         },
-        loadProjects() {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                this.projects = JSON.parse(stored);
+        async loadProjects() {
+            this.projects = [];
+            if (this.user.uid) {
+                try {
+                    const q = query(collection(db, "projects"), where("uid", "==", this.user.uid));
+                    const querySnapshot = await getDocs(q);
+                    querySnapshot.forEach((doc) => {
+                        this.projects.push({ id: doc.id, ...doc.data() });
+                    });
+                } catch (e) {
+                    console.error("Error loading profile projects:", e);
+                }
             }
         },
         saveApiKey() {
@@ -103,33 +94,51 @@ createApp({
         },
         switchTier(tier) {
             this.user.tier = tier;
-            localStorage.setItem('quel_user_tier', tier); // Persist change
+            localStorage.setItem('quel_user_tier', tier);
             this.showPricingModal = false;
             this.showToastNotification(`Welcome to ${tier.toUpperCase()} Plan!`);
         },
         getProjectPreview(p) {
-            // Iframe içinde önizleme (CSS'i biraz küçülttük)
             return `<!DOCTYPE html><html><head><style>body{margin:0;overflow:hidden;transform:scale(0.8);transform-origin:top left;width:125%;height:125%;}${p.css}</style></head><body>${p.html}</body></html>`;
         },
         deleteProject(id) {
-            if (confirm('Are you sure you want to delete this source? This cannot be undone.')) {
-                this.projects = this.projects.filter(p => p.id !== id);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(this.projects));
+            // Silme islemi icin app.js ana ekrani kullanilmasi daha guvenli simdilik
+            // veya burada da deleteDoc ekleyebiliriz ama kullaniciya oraya yonlendiriyoruz
+            if (confirm('Please go to the main Editor to delete projects completely.')) {
+                window.location.href = 'index.html';
             }
         },
         openProject(project) {
-            // Ana sayfaya dönüp projeyi açmak yerine şimdilik basit bir alert.
-            // Gelişmiş versiyonda URL parametresi ile index.html?edit=123 yapılabilir.
-            alert('Please open this project from the main editor dashboard.');
-            window.location.href = 'index.html';
+            window.location.href = 'index.html'; // Editoru acmasi icin
         },
-        logout() {
+        async logout() {
+            await signOut(auth);
             localStorage.removeItem('quel_auth_token');
+            localStorage.removeItem('quel_user_uid');
+            localStorage.removeItem('quel_user_tier');
+            localStorage.removeItem('quel_user_name');
+            localStorage.removeItem('quel_user_email');
+            localStorage.removeItem('quel_user_avatar');
             window.location.href = 'index.html';
         }
     },
     mounted() {
         this.checkAuth();
-        this.loadProjects();
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                this.user.uid = user.uid;
+                this.user.email = user.email;
+                this.user.name = user.displayName || user.email.split('@')[0];
+                this.user.avatar = user.photoURL || `https://ui-avatars.com/api/?name=${this.user.name}&background=random`;
+                // LocalStorage tier sync
+                const savedTier = localStorage.getItem('quel_user_tier');
+                if (savedTier) this.user.tier = savedTier;
+
+                this.loadProjects();
+            } else {
+                window.location.href = 'index.html';
+            }
+        });
     }
 }).mount('#profile-app');

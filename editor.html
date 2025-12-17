@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUEL Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+    <link href="assets/css/style.css" rel="stylesheet">
+</head>
+
+<body class="bg-[#1a1a2e] text-white">
+    <div id="editor-app" class="h-screen flex flex-col">
+        <!-- Toast Notification -->
+        <div v-if="showToast" class="toast" :class="toastType === 'delete' ? 'delete-mode' : ''">
+            <div class="toast-icon">
+                <i :class="toastType === 'delete' ? 'fas fa-trash-alt' : 'fas fa-check'"></i>
+            </div>
+            <span>{{ toastMessage }}</span>
+        </div>
+
+        <!-- Modern Floating Toolbar -->
+        <div class="px-4 py-3 z-50">
+            <div
+                class="bg-[#1a1a2e]/90 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-3 flex items-center justify-between shadow-2xl">
+                <div class="flex items-center gap-4">
+                    <a href="index.html"
+                        class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition text-gray-400 hover:text-white border border-white/5 group">
+                        <i class="fas fa-arrow-left group-hover:-translate-x-1 transition-transform"></i>
+                    </a>
+                    <div class="h-8 w-px bg-white/10"></div>
+                    <div class="flex flex-col">
+                        <input v-model="currentProject.title"
+                            class="bg-transparent text-lg text-white font-bold outline-none focus:text-indigo-400 transition-colors placeholder-gray-600"
+                            placeholder="Untitled Source">
+                        <span class="text-[10px] text-gray-500 font-mono tracking-wider uppercase">Project ID: {{
+                            currentProject.id || 'NEW' }}</span>
+                    </div>
+
+                    <button @click="togglePrivacy"
+                        class="w-8 h-8 rounded-lg flex items-center justify-center transition border border-transparent hover:border-white/10"
+                        :class="currentProject.isPrivate ? 'text-indigo-400 bg-indigo-500/10' : 'text-gray-500 hover:text-gray-300'"
+                        :title="user.tier === 'free' ? 'Upgrade for private sources' : 'Toggle privacy'">
+                        <i :class="currentProject.isPrivate ? 'fas fa-lock' : 'fas fa-lock-open'"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button @click="toggleAiPanel"
+                        class="relative px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium border border-white/5 flex items-center gap-2 transition hover:shadow-lg hover:shadow-indigo-500/10 group">
+                        <i class="fas fa-robot text-indigo-400 group-hover:rotate-12 transition-transform"></i>
+                        <span class="hidden sm:inline text-sm">AI Copilot</span>
+                        <span v-if="hasError" class="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                        </span>
+                    </button>
+
+                    <button @click="saveProject"
+                        class="px-6 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold shadow-lg shadow-indigo-500/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Save</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="flex-1 flex overflow-hidden relative px-4 pb-4 gap-4">
+            <!-- AI Panel (Slide-over) -->
+            <div class="glass-card border border-white/10 rounded-2xl overflow-hidden flex flex-col transition-all duration-300 absolute z-40 left-4 bottom-4 top-20 shadow-2xl"
+                :style="{ width: showAiPanel ? '320px' : '0px', opacity: showAiPanel ? '1' : '0', transform: showAiPanel ? 'translateX(0)' : 'translateX(-20px)' }">
+
+                <div
+                    class="p-4 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-[#1a1a2e] to-[#24243e]">
+                    <span
+                        class="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 flex items-center gap-2">
+                        <i class="fas fa-brain text-white"></i> AI Assistant
+                    </span>
+                    <button @click="showAiPanel = false" class="text-gray-500 hover:text-white"><i
+                            class="fas fa-times"></i></button>
+                </div>
+
+                <div v-if="user.tier !== 'pro_plus'"
+                    class="flex-1 flex flex-col items-center justify-center p-6 text-center relative">
+                    <!-- Locked State Content -->
+                    <i class="fas fa-lock text-4xl text-gray-600 mb-4"></i>
+                    <p class="text-gray-400 text-sm mb-4">Upgrade to Pro+ for AI magic.</p>
+                    <button @click="showPricingModal = true"
+                        class="text-xs font-bold px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition">View
+                        Plans</button>
+                </div>
+
+                <div v-else class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-[#0f0f1a]/50">
+                    <div class="bg-black/30 p-3 rounded-xl border border-white/5">
+                        <label class="text-[10px] uppercase tracking-widest text-gray-500 mb-2 block">API Key</label>
+                        <input type="password" v-model="groqApiKey" @change="saveApiKey" placeholder="sk-..."
+                            class="w-full bg-transparent text-xs text-white outline-none font-mono tracking-tight">
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto space-y-3 custom-scrollbar min-h-[100px]">
+                        <div v-if="!hasError && aiMessages.length === 0"
+                            class="text-center text-gray-500 text-xs py-4 italic">
+                            Running Llama 3 on Groq...
+                        </div>
+                        <div v-for="(msg, index) in aiMessages" :key="index" class="text-xs p-3 rounded-xl border"
+                            :class="msg.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-200' : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-200'">
+                            <div class="font-bold mb-1 opacity-75 flex items-center gap-2">
+                                <i :class="msg.type === 'error' ? 'fas fa-bug' : 'fas fa-lightbulb'"></i> {{ msg.title
+                                }}
+                            </div>
+                            {{ msg.text }}
+                        </div>
+                    </div>
+
+                    <div class="bg-black/30 p-2 rounded-xl border border-white/5 mt-auto">
+                        <textarea v-model="aiPrompt" placeholder="Ask AI to change code..."
+                            class="w-full bg-transparent text-sm text-white outline-none resize-none h-20 placeholder-gray-600 p-2"></textarea>
+                        <button @click="generateCode" :disabled="aiLoading"
+                            class="w-full mt-2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold transition flex justify-center items-center gap-2 disabled:opacity-50">
+                            <span v-if="aiLoading"><i class="fas fa-circle-notch fa-spin"></i> Processing...</span>
+                            <span v-else>Generate <i class="fas fa-magic ml-1"></i></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Code & Preview Split -->
+            <div class="flex-1 flex gap-4 overflow-hidden relative z-10">
+                <!-- Code Editor Column -->
+                <div
+                    class="flex-1 flex flex-col bg-[#161625] rounded-2xl border border-white/5 overflow-hidden shadow-2xl">
+                    <!-- Modern Tabs -->
+                    <div class="flex items-center gap-1 p-2 bg-[#0f0f1a] border-b border-white/5">
+                        <button v-for="tab in ['html', 'css', 'js']" :key="tab" @click="activeTab = tab"
+                            class="px-4 py-2 rounded-lg text-xs font-bold font-mono uppercase transition-all duration-300 relative overflow-hidden"
+                            :class="activeTab === tab ? 'text-white bg-white/10 shadow-inner' : 'text-gray-600 hover:text-gray-400 hover:bg-white/5'">
+                            <span class="relative z-10">{{ tab }}</span>
+                            <div v-if="activeTab === tab" class="absolute bottom-0 left-0 h-0.5 w-full bg-indigo-500">
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="flex-1 relative group">
+                        <textarea v-show="activeTab === 'html'" v-model="currentProject.html" @input="debouncedUpdate"
+                            class="code-editor absolute inset-0 bg-[#161625] text-gray-300 p-4 font-mono text-sm resize-none outline-none selection:bg-indigo-500/30"></textarea>
+                        <textarea v-show="activeTab === 'css'" v-model="currentProject.css" @input="debouncedUpdate"
+                            class="code-editor absolute inset-0 bg-[#161625] text-gray-300 p-4 font-mono text-sm resize-none outline-none selection:bg-indigo-500/30"></textarea>
+                        <textarea v-show="activeTab === 'js'" v-model="currentProject.js" @input="debouncedUpdate"
+                            class="code-editor absolute inset-0 bg-[#161625] text-gray-300 p-4 font-mono text-sm resize-none outline-none selection:bg-indigo-500/30"></textarea>
+
+                        <!-- Floating Language Badge -->
+                        <div
+                            class="absolute bottom-4 right-4 text-[10px] font-mono text-gray-700 pointer-events-none opacity-0 group-hover:opacity-100 transition">
+                            {{ activeTab.toUpperCase() }} EDITOR
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview Column -->
+                <div
+                    class="flex-1 flex flex-col bg-white rounded-2xl overflow-hidden shadow-2xl relative border border-white/10 group">
+                    <div class="absolute top-4 right-4 z-50 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button @click="refreshPreview"
+                            class="bg-black/80 text-white p-2 rounded-lg hover:bg-black transition backdrop-blur-sm shadow-lg">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <iframe ref="previewIframe" :srcdoc="previewContent"
+                        class="preview-frame w-full h-full bg-white"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div
+            class="h-6 bg-[#0f0f1a] border-t border-gray-800 flex items-center justify-between px-4 text-[10px] text-gray-500 font-mono select-none relative z-50">
+            <div class="flex gap-4">
+                <span><i class="fas fa-code-branch mr-1"></i> main</span>
+                <span><i class="fas fa-check mr-1 text-green-500"></i> Ready</span>
+            </div>
+            <div class="flex gap-4">
+                <span>UTF-8</span>
+                <span>{{ activeTab.toUpperCase() }}</span>
+                <span class="text-indigo-400 font-bold" v-if="user.tier === 'pro_plus'"><i class="fas fa-bolt mr-1"></i>
+                    AI Active</span>
+            </div>
+        </div>
+
+        <!-- Pricing Modal -->
+        <div v-if="showPricingModal"
+            class="fixed inset-0 z-[300] flex items-center justify-center bg-[#0f0f1a]/95 backdrop-blur-md">
+            <div class="glass-card p-6 w-full max-w-4xl mx-4 shadow-2xl border border-white/10 relative">
+                <button @click="showPricingModal = false"
+                    class="absolute top-4 right-4 text-gray-400 hover:text-white transition z-10">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+                <h2 class="text-3xl font-bold text-center text-white mb-8 brand-font">Upgrade Your Workspace</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Free -->
+                    <div class="glass-card p-6 border-2 flex flex-col h-full"
+                        :class="user.tier === 'free' ? 'border-indigo-500' : 'border-gray-700'">
+                        <div class="text-center mb-6">
+                            <h3 class="text-2xl font-bold text-white mb-2">Free</h3>
+                            <div class="text-4xl font-bold text-white mb-1">$0</div>
+                            <p class="text-gray-400 text-sm">Forever</p>
+                        </div>
+                        <ul class="space-y-3 mb-6 flex-1">
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                Public sources only</li>
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                Basic code editor</li>
+                            <li class="flex items-start gap-2 text-sm text-gray-500"><i
+                                    class="fas fa-times text-red-400 mt-1"></i> No private sources</li>
+                            <li class="flex items-start gap-2 text-sm text-gray-500"><i
+                                    class="fas fa-times text-red-400 mt-1"></i> No asset hosting</li>
+                            <li class="flex items-start gap-2 text-sm text-gray-500"><i
+                                    class="fas fa-times text-red-400 mt-1"></i> AI assistant locked</li>
+                        </ul>
+                        <button @click="switchTier('free')" :disabled="user.tier === 'free'"
+                            class="w-full py-3 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-semibold transition mt-auto">
+                            {{ user.tier === 'free' ? 'Current Plan' : 'Switch to Free' }}
+                        </button>
+                    </div>
+                    <!-- Pro -->
+                    <div class="glass-card p-6 border-2 flex flex-col h-full"
+                        :class="user.tier === 'pro' ? 'border-amber-500' : 'border-gray-700'">
+                        <div class="text-center mb-6">
+                            <div class="inline-block mb-2"><span class="tier-badge pro">PRO</span></div>
+                            <h3 class="text-2xl font-bold text-white mb-2">Pro</h3>
+                            <div class="text-4xl font-bold text-white mb-1">$9</div>
+                            <p class="text-gray-400 text-sm">Per month</p>
+                        </div>
+                        <ul class="space-y-3 mb-6 flex-1">
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                Everything in Free</li>
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                Private sources</li>
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                2GB asset hosting</li>
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                No ads</li>
+                            <li class="flex items-start gap-2 text-sm text-gray-500"><i
+                                    class="fas fa-times text-red-400 mt-1"></i> AI assistant locked</li>
+                        </ul>
+                        <button @click="switchTier('pro')" :disabled="user.tier === 'pro'"
+                            class="w-full py-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 text-white font-semibold transition shadow-lg mt-auto">
+                            {{ user.tier === 'pro' ? 'Current Plan' : 'Upgrade to Pro' }}
+                        </button>
+                    </div>
+                    <!-- Pro+ -->
+                    <div class="glass-card p-6 border-2 flex flex-col h-full"
+                        :class="user.tier === 'pro_plus' ? 'border-purple-500' : 'border-gray-700'">
+                        <div class="text-center mb-6">
+                            <div class="inline-block mb-2"><span class="tier-badge pro_plus">PRO+</span></div>
+                            <h3 class="text-2xl font-bold text-white mb-2">Pro+</h3>
+                            <div class="text-4xl font-bold text-white mb-1">$19</div>
+                            <p class="text-gray-400 text-sm">Per month</p>
+                        </div>
+                        <ul class="space-y-3 mb-6 flex-1">
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                Everything in Pro</li>
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                Unlimited private sources</li>
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                10GB asset hosting</li>
+                            <li class="flex items-start gap-2 text-sm"><i class="fas fa-check text-green-400 mt-1"></i>
+                                <strong>AI Assistant (Llama 3)</strong>
+                            </li>
+                        </ul>
+                        <button @click="switchTier('pro_plus')" :disabled="user.tier === 'pro_plus'"
+                            class="w-full py-3 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 disabled:opacity-50 text-white font-semibold transition shadow-lg mt-auto">
+                            {{ user.tier === 'pro_plus' ? 'Current Plan' : 'Upgrade to Pro+' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3.3.4/dist/vue.global.js"></script>
+    <script type="module" src="assets/js/editor.js"></script>
+</body>
+
+</html>

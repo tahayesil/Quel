@@ -49,7 +49,14 @@
                     </div>
 
                     <div class="space-y-4">
-                        <button @click="handleSocialLogin" :disabled="authLoading || isLockedOut"
+                        <button @click="handleSocialLogin('google')" :disabled="authLoading || isLockedOut"
+                            class="w-full py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition flex items-center justify-center gap-2 group disabled:opacity-50 mb-3">
+                            <i v-if="authLoading" class="fas fa-circle-notch fa-spin"></i>
+                            <i v-else class="fab fa-google text-lg text-red-500"></i>
+                            <span>{{ authLoading ? 'Connecting...' : 'Continue with Google' }}</span>
+                        </button>
+
+                        <button @click="handleSocialLogin('github')" :disabled="authLoading || isLockedOut"
                             class="w-full py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition flex items-center justify-center gap-2 group disabled:opacity-50">
                             <i v-if="authLoading" class="fas fa-circle-notch fa-spin"></i>
                             <i v-else class="fab fa-github text-lg group-hover:text-white"></i>
@@ -109,14 +116,14 @@
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="glass-card p-6 border-2"
+                        <div class="glass-card p-6 border-2 flex flex-col h-full"
                             :class="user.tier === 'free' ? 'border-indigo-500' : 'border-gray-700'">
                             <div class="text-center mb-6">
                                 <h3 class="text-2xl font-bold text-white mb-2">Free</h3>
                                 <div class="text-4xl font-bold text-white mb-1">$0</div>
                                 <p class="text-gray-400 text-sm">Forever</p>
                             </div>
-                            <ul class="space-y-3 mb-6">
+                            <ul class="space-y-3 mb-6 flex-1">
                                 <li class="flex items-start gap-2 text-sm"><i
                                         class="fas fa-check text-green-400 mt-1"></i> Public sources only</li>
                                 <li class="flex items-start gap-2 text-sm"><i
@@ -138,7 +145,7 @@
                             </button>
                         </div>
 
-                        <div class="glass-card p-6 border-2"
+                        <div class="glass-card p-6 border-2 flex flex-col h-full"
                             :class="user.tier === 'pro' ? 'border-amber-500' : 'border-gray-700'">
                             <div class="text-center mb-6">
                                 <div class="inline-block mb-2"><span class="tier-badge pro">PRO</span></div>
@@ -146,7 +153,7 @@
                                 <div class="text-4xl font-bold text-white mb-1">$9</div>
                                 <p class="text-gray-400 text-sm">Per month</p>
                             </div>
-                            <ul class="space-y-3 mb-6">
+                            <ul class="space-y-3 mb-6 flex-1">
                                 <li class="flex items-start gap-2 text-sm"><i
                                         class="fas fa-check text-green-400 mt-1"></i> Everything in Free</li>
                                 <li class="flex items-start gap-2 text-sm"><i
@@ -166,7 +173,7 @@
                             </button>
                         </div>
 
-                        <div class="glass-card p-6 border-2"
+                        <div class="glass-card p-6 border-2 flex flex-col h-full"
                             :class="user.tier === 'pro_plus' ? 'border-purple-500' : 'border-gray-700'">
                             <div class="text-center mb-6">
                                 <div class="inline-block mb-2"><span class="tier-badge pro_plus">PRO+</span></div>
@@ -174,7 +181,7 @@
                                 <div class="text-4xl font-bold text-white mb-1">$19</div>
                                 <p class="text-gray-400 text-sm">Per month</p>
                             </div>
-                            <ul class="space-y-3 mb-6">
+                            <ul class="space-y-3 mb-6 flex-1">
                                 <li class="flex items-start gap-2 text-sm"><i
                                         class="fas fa-check text-green-400 mt-1"></i> Everything in Pro</li>
                                 <li class="flex items-start gap-2 text-sm"><i
@@ -541,158 +548,14 @@
                 </section>
             </div>
 
-            <transition name="fade">
-                <div v-if="showEditor" class="fixed inset-0 z-[200] bg-[#1a1a2e] flex flex-col">
-                    <div
-                        class="bg-[#1a1a2e] border-b border-gray-700 px-6 py-4 flex items-center justify-between shadow-lg relative z-50">
-                        <div class="flex items-center gap-4">
-                            <button @click="closeEditor"
-                                class="px-4 py-2 rounded-lg hover:bg-gray-800 transition text-gray-300">
-                                <i class="fas fa-arrow-left mr-2"></i> Back
-                            </button>
-                            <div class="h-6 w-px bg-gray-700"></div>
-                            <input v-model="currentProject.title"
-                                class="bg-transparent text-lg text-white font-bold outline-none focus:text-indigo-400 transition-colors"
-                                placeholder="Untitled Source">
-
-                            <button @click="togglePrivacy" :disabled="user.tier === 'free'"
-                                class="p-2 rounded-lg hover:bg-gray-800 transition"
-                                :class="currentProject.isPrivate ? 'text-indigo-400' : 'text-gray-500'"
-                                :title="user.tier === 'free' ? 'Upgrade for private sources' : 'Toggle privacy'">
-                                <i :class="currentProject.isPrivate ? 'fas fa-lock' : 'fas fa-lock-open'"></i>
-                            </button>
-                        </div>
-
-                        <div class="flex items-center gap-3">
-                            <button @click="inviteCollaborator"
-                                class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 relative">
-                                <i class="fas fa-user-plus"></i>
-                                <span v-if="collaborators.length > 0"
-                                    class="absolute -top-1 -right-1 bg-green-500 text-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{{
-                                    collaborators.length }}</span>
-                            </button>
-
-                            <button @click="openAssetModal"
-                                class="p-2 sm:px-4 sm:py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition text-white font-medium border border-gray-700 flex items-center gap-2">
-                                <i class="fas fa-cloud-upload-alt"></i> <span class="hidden sm:inline">Assets</span>
-                            </button>
-
-                            <button @click="toggleAiPanel"
-                                class="relative p-2 sm:px-4 sm:py-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition text-white font-medium border border-gray-700 flex items-center gap-2">
-                                <i class="fas fa-robot text-indigo-400"></i>
-                                <span class="hidden sm:inline">AI Assistant</span>
-                                <span v-if="hasError" class="absolute top-1 right-1 pulse-dot"></span>
-                            </button>
-
-                            <button @click="saveProject"
-                                class="p-2 sm:px-4 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 transition text-white font-semibold shadow-lg shadow-green-500/20">
-                                <i class="fas fa-save sm:mr-2"></i><span class="hidden sm:inline">Save</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div :class="['ai-panel', { 'open': showAiPanel }]">
-                        <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
-                            <span class="font-bold text-indigo-400 flex items-center gap-2"><i class="fas fa-brain"></i>
-                                Code Copilot</span>
-                            <button @click="showAiPanel = false" class="text-gray-500 hover:text-white"><i
-                                    class="fas fa-times"></i></button>
-                        </div>
-
-                        <div v-if="user.tier !== 'pro_plus'"
-                            class="flex-1 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-                            <div class="absolute inset-0 bg-indigo-900/20 backdrop-blur-sm z-0"></div>
-                            <div class="relative z-10">
-                                <i class="fas fa-lock text-5xl text-gray-500 mb-4"></i>
-                                <h4 class="text-xl font-bold text-white mb-2">Unlock AI Assistant</h4>
-                                <p class="text-gray-400 text-sm mb-6">Real-time debugging and code generation available
-                                    on Pro+ plan.</p>
-                                <button @click="showPricingModal = true"
-                                    class="px-6 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold shadow-lg">Upgrade
-                                    to Pro+</button>
-                            </div>
-                        </div>
-
-                        <div v-else class="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-                            <div class="bg-gray-800/80 p-3 rounded mb-2 border border-gray-700">
-                                <label class="text-xs text-gray-400 mb-1 block">Groq API Key (Llama 3)</label>
-                                <input type="password" v-model="groqApiKey" @change="saveApiKey" placeholder="gsk_..."
-                                    class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-indigo-500 outline-none">
-                            </div>
-                            <div class="bg-gray-800/50 p-2 rounded mb-2">
-                                <textarea v-model="aiPrompt" placeholder="Describe an animation to generate..."
-                                    class="w-full bg-transparent text-sm text-white outline-none resize-none h-16"></textarea>
-                                <button @click="generateCode" :disabled="aiLoading"
-                                    class="w-full mt-2 py-1 bg-indigo-600 hover:bg-indigo-700 rounded text-xs font-bold transition flex justify-center items-center gap-2 disabled:opacity-50">
-                                    <span v-if="aiLoading"><i class="fas fa-circle-notch fa-spin"></i>
-                                        Thinking...</span>
-                                    <span v-else>Generate Code</span>
-                                </button>
-                            </div>
-                            <div v-if="!hasError && aiMessages.length === 0" class="ai-message ai"><i
-                                    class="fas fa-check-circle mr-2 text-green-400"></i> Standing by.</div>
-                            <div v-if="aiDebugging" class="ai-message ai"><i
-                                    class="fas fa-circle-notch fa-spin mr-2"></i> Analyzing Error...</div>
-                            <div v-for="(msg, index) in aiMessages" :key="index"
-                                :class="['ai-message', msg.type === 'error' ? 'error-card' : 'ai']">
-                                <div class="font-bold mb-1 text-xs uppercase opacity-75"><i
-                                        :class="msg.type === 'error' ? 'fas fa-bug' : 'fas fa-lightbulb'"></i> {{
-                                    msg.title }}</div>
-                                {{ msg.text }}
-                                <div v-if="msg.line" class="mt-2 text-xs font-mono bg-black/20 p-1 rounded">Line {{
-                                    msg.line }}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex-1 flex editor-split overflow-hidden relative z-10">
-                        <div class="flex-1 flex flex-col bg-[#1e1e1e]">
-                            <div class="flex bg-[#1a1a2e] border-b border-gray-800">
-                                <button @click="activeTab = 'html'"
-                                    :class="activeTab === 'html' ? 'tab-active' : 'tab-inactive'"
-                                    class="flex-1 px-4 py-3 font-semibold transition flex items-center justify-center gap-2 text-sm text-gray-300"><i
-                                        class="fab fa-html5 text-orange-500"></i> HTML</button>
-                                <button @click="activeTab = 'css'"
-                                    :class="activeTab === 'css' ? 'tab-active' : 'tab-inactive'"
-                                    class="flex-1 px-4 py-3 font-semibold transition flex items-center justify-center gap-2 text-sm text-gray-300"><i
-                                        class="fab fa-css3-alt text-blue-500"></i> CSS</button>
-                                <button @click="activeTab = 'js'"
-                                    :class="activeTab === 'js' ? 'tab-active' : 'tab-inactive'"
-                                    class="flex-1 px-4 py-3 font-semibold transition flex items-center justify-center gap-2 text-sm text-gray-300"><i
-                                        class="fab fa-js text-yellow-500"></i> JS</button>
-                            </div>
-                            <div class="flex-1 relative">
-                                <textarea v-show="activeTab === 'html'" v-model="currentProject.html"
-                                    @input="debouncedUpdate" class="code-editor absolute inset-0"></textarea>
-                                <textarea v-show="activeTab === 'css'" v-model="currentProject.css"
-                                    @input="debouncedUpdate" class="code-editor absolute inset-0"></textarea>
-                                <textarea v-show="activeTab === 'js'" v-model="currentProject.js"
-                                    @input="debouncedUpdate" class="code-editor absolute inset-0"></textarea>
-                            </div>
-                        </div>
-                        <div class="flex-1 bg-gray-900 border-l border-gray-700 flex flex-col">
-                            <div
-                                class="bg-[#1a1a2e] px-4 py-2 border-b border-gray-800 flex items-center justify-between h-[50px]">
-                                <span class="text-xs font-bold uppercase tracking-widest text-gray-500">Live
-                                    Preview</span>
-                                <button @click="refreshPreview" class="text-gray-400 hover:text-white transition"><i
-                                        class="fas fa-sync-alt"></i></button>
-                            </div>
-                            <div class="flex-1 overflow-hidden bg-white relative">
-                                <iframe ref="previewIframe" :srcdoc="previewContent" class="preview-frame"></iframe>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </transition>
         </div>
     </div>
 
 
 
     <script src="https://unpkg.com/vue@3.3.4/dist/vue.global.js"></script>
-    <script src="assets/js/shader.js?v=2"></script>
-    <script type="module" src="assets/js/app.js?v=2"></script>
+    <script src="assets/js/shader.js"></script>
+    <script type="module" src="assets/js/app.js"></script>
 </body>
 
 </html>
