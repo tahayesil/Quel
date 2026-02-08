@@ -2,6 +2,8 @@
 
 QUEL is a modern, browser-based HTML/CSS/JS playground and developer portfolio platform. It allows users to write code, preview it in real-time, and leverage AI assistance.
 
+🔗 Live Demo: tahayesil.github.io/Quel/
+
 ## ✨ Features
 
 -   **Live Code Editor:** Instant preview for HTML, CSS, and JavaScript.
